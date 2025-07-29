@@ -1,150 +1,148 @@
 # Reservation System
 
-This is a simple backend application that lets **patients** book appointments at **healthcare organizations** (like hospitals and clinics) through a REST API. It also supports **representatives** (staff) who can book or cancel appointments on behalf of patients.
+Hello! I’m thrilled to share my **Reservation System** backend with you. It lets **patients** book appointments at **healthcare organizations** (like hospitals or clinics) and allows **representatives** (staff) to manage slots and bookings for patients.
 
-## Key Concepts
+## What’s Inside
 
-* **Patient**: A user who books an appointment (name, date of birth, contact info).
-* **Representative**: Organization staff who can manage bookings and slots.
-* **Organization**: A hospital or clinic, which can have multiple physical **locations**.
-* **Slot**: A fixed time period on a specific date (Morning, Afternoon, Evening) at a given location.
-* **Appointment**: A patient’s reservation for one slot, booked by either the patient or a representative.
-* **Postal Code**: Used to convert a patient’s ZIP code into latitude/longitude to find the nearest location.
+* **Patient**: Registers themselves and books appointments
+* **Representative**: Staff who can create or cancel appointments for any patient
+* **Organization**: A hospital or clinic, which can have multiple **locations**
+* **Slot**: A daily time window (MORNING, AFTERNOON, EVENING) at a location
+* **Appointment**: A patient’s reserved slot, created by a patient or rep
+* **PostalCode Table**: Converts ZIP codes to lat/lon so we can find the closest location to you
 
-## Folder Structure
-<img width="452" height="724" alt="Screenshot 2025-07-29 142336" src="https://github.com/user-attachments/assets/9dc45178-42a0-4b5c-b3b8-4e74af2dd6c9" />
+## Project Layout
+<img width="451" height="721" alt="Screenshot 2025-07-29 143250" src="https://github.com/user-attachments/assets/37b8a708-2a04-4cf0-8321-81ca6cd0bd99" />
 
+
+```text
+reservation-system/       ← root folder
+│  pom.xml                ← Maven build file
+│  README.md              ← you’re reading it!
+│
+├─ db/                    ← raw SQL scripts
+│    ├─ schema.sql        ← table definitions (DDL)
+│    └─ seeds.sql         ← starter data (INSERTs)
+│
+├─ src/                   ← all Java code
+│   ├─ main/java/...      ← controllers, services, models, repos
+│   └─ main/resources/... ← configs (application.yml)
+│
+└─ output/                ← generated assets (screenshots, exports)
 ```
-reservation-system/
-├── src/               # Java Spring Boot application code
-│   ├── main/java/...  # Controllers, services, entities, repositories
-│   └── main/resources # Configuration (application.yml)
-├── db/                # Raw SQL scripts for database schema & sample data
-│   ├── schema.sql     # CREATE TABLE statements
-│   └── seeds.sql      # INSERT statements for initial data
-├── output/            # Screenshots or generated files
-├── pom.xml            # Maven build file
-└── README.md          # This file
 
-
-## Getting Started
+## How I Get It Running
 
 ### Prerequisites
 
-* Java 24 (
+* Java 17 or newer
 * Maven
-* PostgreSQL
+* PostgreSQL database
 
-### Database Setup
+### 1. Set Up the Database
 
-1. Create a new PostgreSQL database, e.g. `reservation_system`.
-2. From the `db/` folder, run:
+1. Create a Postgres database named `reservation_system`.
+2. Run these two commands from the project root:
 
    ```bash
    psql -d reservation_system -f db/schema.sql
    psql -d reservation_system -f db/seeds.sql
    ```
 
-   This creates all tables and loads sample locations and postal codes.
+   * The first script creates all the tables I need.
+   * The second script pre-loads locations and postal codes.
 
-### Application Configuration
+### 2. Configure the App
 
-In `src/main/resources/application.yml`, set:
+Open `src/main/resources/application.yml` and update your DB credentials:
 
 ```yaml
 spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/reservation_system
-    username: postgres
-    password:Giridhar123
+    username: YOUR_DB_USER
+    password: YOUR_DB_PASSWORD
 ```
 
-### Build & Run
+### 3. Build & Launch
+
+From your terminal:
 
 ```bash
-# From project root
-gradle build    # or: mvn package
-java -jar build/libs/reservation-system.jar
-# or, with Maven:
-mvn spring-boot:run
+# build the jar
+mvn clean package
+
+# run the app
+java -jar target/reservation-0.0.1-SNAPSHOT.jar
 ```
 
-The server starts on port **8080** by default.
+The API will be available at **[http://localhost:8080](http://localhost:8080)**.
 
-## API Endpoints
+## Quick API Guide
 
-All endpoints use **JSON**.
+### Find the Nearest Locations
 
-### 1. Find Nearby Locations
-
-```
-GET /api/locations/nearby?city={City}&zip={ZIP}
+```http
+GET /api/locations/nearby?city=Bengaluru&zip=560001
 ```
 
-* Returns a list of organization locations within a 5-mile radius of the city/ZIP. If none found, returns the single nearest location.
+Returns all locations within 5 miles, or the single closest one.
 
-### 2. Manage Slots
+### Manage Slots (Reps Only)
 
 * **Create a slot**
 
-  ```bash
+  ```http
   POST /api/slots
   Content-Type: application/json
 
   {
-    "locationId": "<location-uuid>",
-    "date": "2025-08-10",
-    "slot": "MORNING",
-    "capacity": 10
+    "locationId":"<location-uuid>",
+    "date":"2025-08-15",
+    "slot":"AFTERNOON",
+    "capacity":5
   }
   ```
-
 * **List slots**
 
-  ```bash
-  GET /api/slots?locationId=<location-uuid>&date=2025-08-10
+  ```http
+  GET /api/slots?locationId=<location-uuid>&date=2025-08-15
   ```
-
 * **Delete a slot**
 
-  ```bash
+  ```http
   DELETE /api/slots/{slotId}
   ```
 
-### 3. Book & Cancel Appointments
+### Book & Cancel Appointments
 
 * **Book**
 
-  ```bash
+  ```http
   POST /api/appointments
   Content-Type: application/json
 
   {
-    "patientId": "<patient-uuid>",
-    "repId": "<rep-uuid>",    # or omit if patient books directly
-    "city": "Bengaluru",
-    "zip": "560001",
-    "date": "2025-08-10",
-    "slot": "MORNING"
+    "patientId":"<patient-uuid>",
+    "repId":"<rep-uuid>",       # optional if patient books
+    "city":"Mumbai",
+    "zip":"400001",
+    "date":"2025-08-20",
+    "slot":"MORNING"
   }
   ```
-
-  * The system picks the nearest location, looks up the slot, checks availability and a 24-hour cutoff, then books.
-
 * **Cancel**
 
-  ```bash
+  ```http
   DELETE /api/appointments/{appointmentId}
   ```
 
-  * Cannot cancel within 24 hours of the slot start.
+*Note: cancellations must happen more than 24 hours before the slot start.*
 
-## Next Steps
+## What’s Next?
 
-* Add **authentication** (e.g. JWT) so only logged-in patients/reps can call the API.
-* Integrate **email notifications** for confirmations.
-* Build a simple front-end or mobile client.
+* Add **authentication** so users must log in.
+* Integrate **email/SMS** notifications for confirmations.
+* Build a simple **web or mobile** front-end.
 
----
-
-Now you have everything you need to run, test, and extend the Reservation System! Feel free to customize or reach out with questions.
+Enjoy exploring the code! Feel free to reach out if you have questions or suggestions.
