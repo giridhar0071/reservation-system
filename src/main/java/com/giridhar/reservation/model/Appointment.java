@@ -30,6 +30,16 @@ public class Appointment {
 
     @Column(name = "booked_at")
     private Instant bookedAt = Instant.now();
+    public Appointment() {}
+    public Appointment(Patient patient,
+                       Representative rep,
+                       SlotAvailability slotAvailability,
+                       Instant bookedAt) {
+        this.patient          = patient;
+        this.rep              = rep;
+        this.slotAvailability = slotAvailability;
+        this.bookedAt         = bookedAt;
+    }
 
     public UUID getId() {
         return id;

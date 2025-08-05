@@ -1,36 +1,57 @@
 package com.giridhar.reservation.service;
-
+import com.giridhar.reservation.Exception.SlotFullException;
 import com.giridhar.reservation.dto.BookAppointmentRequest;
 import com.giridhar.reservation.model.*;
 import com.giridhar.reservation.repository.*;
+import com.giridhar.reservation.service.RepresentativeService;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.giridhar.reservation.model.SlotAvailability;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+
 
 @Service
 public class AppointmentService {
     private final PatientRepository patientRepo;
     private final RepresentativeRepository repRepo;
-    private final GeoService  geoService;
+    private final GeoService geoService;
     private final SlotAvailabilityRepository slotRepo;
-    private final AppointmentRepository  apptRepo;
+    private final AppointmentRepository apptRepo;
+
+    private final NextPatientPointerRepository pointerRepo;
+
+    private final RepresentativeService repService;
+
+    private final WaitingListService waitingListSvc;
+
 
     public AppointmentService(
             PatientRepository patientRepo,
             RepresentativeRepository repRepo,
+            RepresentativeService repService,
             GeoService geoService,
             SlotAvailabilityRepository slotRepo,
-            AppointmentRepository apptRepo
+            AppointmentRepository apptRepo,
+            NextPatientPointerRepository pointerRepo,
+            WaitingListService waitingListSvc
+
     ) {
-        this.patientRepo  = patientRepo;
-        this.repRepo      = repRepo;
-        this.geoService   = geoService;
-        this.slotRepo     = slotRepo;
-        this.apptRepo     = apptRepo;
+        this.patientRepo = patientRepo;
+        this.repRepo = repRepo;
+        this.geoService = geoService;
+        this.repService   = repService;
+        this.slotRepo = slotRepo;
+        this.apptRepo = apptRepo;
+        this.pointerRepo = pointerRepo;
+        this.waitingListSvc = waitingListSvc;
+
     }
 
     @Transactional
@@ -58,10 +79,10 @@ public class AppointmentService {
         // 4) Enforce 24-hour cutoff
         Instant slotStart = slot.getDate()
                 .atStartOfDay()
-                .plus(switch(slot.getSlot()) {
-                    case MORNING   -> Duration.ofHours(9);
+                .plus(switch (slot.getSlot()) {
+                    case MORNING -> Duration.ofHours(9);
                     case AFTERNOON -> Duration.ofHours(13);
-                    case EVENING   -> Duration.ofHours(17);
+                    case EVENING -> Duration.ofHours(17);
                 })
                 .toInstant(java.time.ZoneOffset.UTC);
         if (Duration.between(Instant.now(), slotStart).toHours() < 24) {
@@ -71,7 +92,12 @@ public class AppointmentService {
         // 5) Enforce capacity
         long bookedCount = apptRepo.countBySlotAvailability(slot);
         if (bookedCount >= slot.getCapacity()) {
-            throw new IllegalStateException("Slot is full");
+            // delegate to new service
+            UUID entryId = waitingListSvc.addToWaitingList(p, slot.getLocation());
+            throw new com.giridhar.reservation.Exception.SlotFullException(
+                    "Slot is full – you’ve been placed on the waiting list.",
+                    entryId
+            );
         }
 
         // 6) Create & save
@@ -91,10 +117,10 @@ public class AppointmentService {
         SlotAvailability slot = appt.getSlotAvailability();
         Instant slotStart = slot.getDate()
                 .atStartOfDay()
-                .plus(switch(slot.getSlot()) {
-                    case MORNING   -> Duration.ofHours(9);
+                .plus(switch (slot.getSlot()) {
+                    case MORNING -> Duration.ofHours(9);
                     case AFTERNOON -> Duration.ofHours(13);
-                    case EVENING   -> Duration.ofHours(17);
+                    case EVENING -> Duration.ofHours(17);
                 })
                 .toInstant(java.time.ZoneOffset.UTC);
         if (Duration.between(Instant.now(), slotStart).toHours() < 24) {
@@ -102,5 +128,38 @@ public class AppointmentService {
         }
 
         apptRepo.delete(appt);
+
     }
+    @Transactional
+    public void runRoundRobinBooking() {
+        // a) fetch all future slots with free capacity
+        List<SlotAvailability> openSlots = slotRepo.findByDateAfterAndCapacityGreaterThan(LocalDate.now(), 0);
+
+        // b) load your full patient list
+        List<Patient> allPatients = patientRepo.findAll(Sort.by("id"));
+        if (openSlots.isEmpty() || allPatients.isEmpty()) return;
+
+        // c) load (or init) the persisted pointer
+        NextPatientPointer ptr = pointerRepo.findById(1L)
+                .orElseGet(() -> new NextPatientPointer());
+
+        int idx = ptr.getPointer();
+
+        // d) for each slot, book the next patient in round-robin
+
+        for (SlotAvailability slot : openSlots) {
+            Patient p = allPatients.get(idx % allPatients.size());
+            Representative rep = repService.selectDefaultRep();         // now available
+            Appointment appt = new Appointment(p, rep, slot, Instant.now());
+            apptRepo.save(appt);
+            idx++;
+        }
+
+        // e) save updated pointer for next run
+        ptr.setPointer(idx);
+        pointerRepo.save(ptr);
+    }
+
 }
+
+

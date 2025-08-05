@@ -6,6 +6,7 @@ import com.giridhar.reservation.model.Appointment;
 import com.giridhar.reservation.service.AppointmentService;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -16,6 +17,14 @@ public class AppointmentController {
 
     public AppointmentController(AppointmentService appointmentService) {
         this.appointmentService = appointmentService;
+    }
+    @ExceptionHandler
+    @ResponseStatus
+    public Map<String, Object> handleSlotFull(com.giridhar.reservation.Exception.SlotFullException ex) {
+        return Map.of(
+                "message", ex.getMessage(),
+                "waitingEntryId", ex.getWaitingEntryId()
+        );
     }
 
     @PostMapping

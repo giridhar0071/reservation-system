@@ -19,7 +19,7 @@ public class SlotAvailability {
     @Column(updatable = false, nullable = false)
     private UUID id;
 
-    @ManyToOne(optional = false)
+    @ManyToOne
     @JoinColumn(name = "location_id")
     private OrganizationLocation location;
 

@@ -54,4 +54,5 @@ public interface OrganizationLocationRepository extends JpaRepository<Organizati
             @Param("lat") double lat,
             @Param("lon") double lon
     );
+
 }
